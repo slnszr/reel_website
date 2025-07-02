@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Anomalyze - Intelligent Anomaly Analyzer</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: white;
+      color: black;
+      margin: 0;
+      padding: 40px;
+      transition: background-color 0.3s, color 0.3s;
+    }
+
+    .dark-mode {
+      background-color: #121212;
+      color: #f0f0f0;
+    }
+
+    .top-left {
+      position: absolute;
+      top: 10px;
+      left: 20px;
+    }
+
+    .top-right {
+      position: absolute;
+      top: 10px;
+      right: 20px;
+    }
+
+    h2 {
+      text-align: center;
+    }
+
+    #result {
+      text-align: center;
+      margin: 20px 0;
+      font-weight: bold;
+    }
+
+    canvas {
+      display: block;
+      margin: 0 auto 20px;
+    }
+
+    #history {
+      list-style: none;
+      padding: 0;
+      max-width: 600px;
+      margin: 20px auto;
+    }
+
+    #history li {
+      background: #f5f5f5;
+      padding: 10px;
+      margin: 5px 0;
+      border-radius: 6px;
+    }
+
+    .dark-mode #history li {
+      background: #1e1e1e;
+      color: #f0f0f0;
+    }
+
+    /* Chatbot */
+    #chatbot-container {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      width: 300px;
+      font-family: Arial, sans-serif;
+      z-index: 999;
+    }
+
+    #chatbot-header {
+      background-color: #343a40;
+      color: white;
+      padding: 10px;
+      border-radius: 8px 8px 0 0;
+      cursor: pointer;
+      text-align: center;
+    }
+
+    #chatbot-box {
+      display: none;
+      background-color: white;
+      border: 1px solid #ccc;
+      border-top: none;
+      padding: 10px;
+      height: 300px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .dark-mode #chatbot-box {
+      background-color: #1e1e1e;
+      color: #eee;
+      border-color: #444;
+    }
+
+    #chatbot-messages {
+      overflow-y: auto;
+      flex: 1;
+      margin-bottom: 10px;
+      font-size: 14px;
+    }
+
+    #chatbot-input {
+      width: 100%;
+      padding: 8px;
+      font-size: 14px;
+    }
+
+    .bot-message {
+      background-color: #e1f5fe;
+      padding: 6px 8px;
+      margin-bottom: 5px;
+      border-radius: 4px;
+    }
+
+    .user-message {
+      background-color: #dcedc8;
+      padding: 6px 8px;
+      margin-bottom: 5px;
+      border-radius: 4px;
+      text-align: right;
+    }
+
+    .dark-mode .bot-message {
+      background-color: #2e3c50;
+      color: #eee;
+    }
+
+    .dark-mode .user-message {
+      background-color: #3a4a3f;
+      color: #eee;
+    }
+  </style>
+</head>
+<body>
+  <div class="top-left">
+    <a href="/about"><button>📘 About Us</button></a>
+  </div>
+
+  <div class="top-right">
+    <label for="darkToggle">🌗 Dark Mode</label>
+    <input type="checkbox" id="darkToggle" onchange="toggleDarkMode()" />
+  </div>
+
+  <h2>🛡️ Anomalyze - Intelligent Anomaly Analyzer</h2>
+
+  <div style="text-align:center;">
+    <label for="size">Enter Packet Size (bytes):</label>
+    <input type="number" id="size" />
+    <button onclick="sendPacket()">Predict</button>
+  </div>
+
+  <p id="result"></p>
+
+  <canvas id="packetChart" width="400" height="200"></canvas>
+
+  <h3 style="text-align: center;">🧑‍💻 Prediction History</h3>
+  <ul id="history"></ul>
+
+  <!-- Chatbot -->
+  <div id="chatbot-container">
+    <div id="chatbot-header" onclick="toggleChatbot()">🤖 Need help? Chat with us</div>
+    <div id="chatbot-box">
+      <div id="chatbot-messages"></div>
+      <input type="text" id="chatbot-input" placeholder="Type your question..." onkeydown="if(event.key==='Enter') sendMessage()" />
+    </div>
+  </div>
+
+  <script>
+    const ctx = document.getElementById("packetChart").getContext("2d");
+    const chart = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: [],
+        datasets: [{
+          label: "Packet Size (bytes)",
+          data: [],
+          backgroundColor: "#00bcd4"
+        }]
+      },
+      options: {
+        scales: {
+          y: { beginAtZero: true }
+        }
+      }
+    });
+
+    function toggleDarkMode() {
+      document.body.classList.toggle("dark-mode");
+    }
+
+    function sendPacket() {
+      const size = document.getElementById("size").value;
+      if (!size) return;
+
+      fetch("/predict", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ packet_size: parseInt(size) })
+      })
+      .then(res => res.json())
+      .then(data => {
+        const result = document.getElementById("result");
+        const label = data.prediction;
+        const confidence = data.confidence;
+
+        result.textContent = `${label === "Anomalous" ? "🚨" : "✅"} Prediction: ${label} (${confidence}% confidence)`;
+        result.style.color = label === "Anomalous" ? "red" : "green";
+
+        const history = document.getElementById("history");
+        const item = document.createElement("li");
+        item.textContent = `${size} bytes — ${label} (${confidence}% confidence)`;
+        history.prepend(item);
+
+        chart.data.labels.push(chart.data.labels.length + 1);
+        chart.data.datasets[0].data.push(parseInt(size));
+        chart.update();
+      });
+    }
+
+    function toggleChatbot() {
+      const box = document.getElementById("chatbot-box");
+      box.style.display = box.style.display === "none" ? "flex" : "none";
+    }
+
+    function sendMessage() {
+      const input = document.getElementById("chatbot-input");
+      const message = input.value.trim();
+      if (!message) return;
+
+      const messages = document.getElementById("chatbot-messages");
+      messages.innerHTML += `<div class="user-message">${message}</div>`;
+
+      let response = "I'm not sure how to help with that.";
+      if (message.toLowerCase().includes("anomaly")) {
+        response = "Anomalies are detected using a machine learning model based on packet size.";
+      } else if (message.toLowerCase().includes("confidence")) {
+        response = "Confidence indicates how certain the model is in its prediction.";
+      } else if (message.toLowerCase().includes("mode")) {
+        response = "You can toggle dark mode using the switch in the top-right corner.";
+      }
+
+      setTimeout(() => {
+        messages.innerHTML += `<div class="bot-message">${response}</div>`;
+        messages.scrollTop = messages.scrollHeight;
+      }, 500);
+
+      input.value = "";
+    }
+
+    window.onload = () => {
+      document.getElementById("chatbot-box").style.display = "none";
+    };
+  </script>
+</body>
+</html>
+
