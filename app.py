@@ -1,5 +1,12 @@
 from flask import Flask, request, jsonify, render_template
 from ml_model import predict_packet_with_confidence
+from dotenv import load_dotenv
+import os
+import cohere
+
+# Ortam değişkenlerini yükle
+load_dotenv()
+co = cohere.Client(os.getenv("COHERE_API_KEY"))
 
 app = Flask(__name__)
 
@@ -25,12 +32,28 @@ def predict():
         return jsonify({
             "packet_size": size,
             "prediction": label,
-            "confidence": round(confidence * 100, 2)  # Yüzdeye burada çevrilir
+            "confidence": round(confidence * 100, 2)
         })
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route("/chatbot", methods=["POST"])
+def chatbot():
+    try:
+        user_msg = request.json.get("message", "")
+        if not user_msg:
+            return jsonify({"response": "No message received."}), 400
+
+        response = co.chat(
+            model="command-r",
+            message=user_msg,
+            temperature=0.5
+        )
+
+        return jsonify({"response": response.text})
+    except Exception as e:
+        return jsonify({"response": f"Error: {str(e)}"}), 500
+
 if __name__ == "__main__":
     app.run(debug=True)
-
